@@ -11,23 +11,40 @@ use crate::message::Message;
 use crate::widgets;
 
 pub fn view(app: &App) -> Element<'_, Message> {
-    let notes = app
-        .shared
-        .notes
-        .iter()
-        .enumerate()
-        .fold(column![], |column, (index, note)| {
-            column.push(text(format!("{}. {}", index + 1, note)))
-        });
+    let mut notes = column![].spacing(8);
+    for (index, note) in app.shared.notes.iter().enumerate() {
+        notes = notes.push(text(format!("{}. {}", index + 1, note)));
+    }
+
+    let projection: Element<'_, Message> = column![
+        text(format!("Active page: {}", app.active_page.label())),
+        text(format!(
+            "Selected control family: {}",
+            app.shared.selected_control.label()
+        )),
+        text(format!(
+            "Last menu action: {}",
+            app.shared
+                .last_menu_action
+                .map(|action| action.label())
+                .unwrap_or("none")
+        )),
+        text(format!("Tick subscription count: {}", app.shared.ticks)),
+        notes,
+    ]
+    .spacing(10)
+    .into();
 
     let content = column![
-        widgets::section_title("Data flow"),
-        text("Shared state lives in App, then gets projected into each page view."),
-        text(format!("Active page: {}", app.active_page.label())),
-        text(format!("Menu open: {}", app.menu_open)),
-        notes.spacing(8),
+        widgets::section_title("DataFlow"),
+        widgets::note("Read this page alongside App::update: every line below is derived from the current immutable state snapshot."),
+        widgets::section_card(
+            "Shared state projection",
+            "One App owns the state and each page reads the bits it needs. That keeps event flow explicit for learners.",
+            projection,
+        ),
     ]
-    .spacing(12);
+    .spacing(16);
 
     container(content).width(Length::Fill).into()
 }

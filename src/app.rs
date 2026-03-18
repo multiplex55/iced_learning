@@ -3,53 +3,16 @@
 //! Iced applications are usually modeled around two core functions:
 //! - `update`, which handles a `Message` and mutates state.
 //! - `view`, which renders widgets from the current immutable state.
-//!
-//! This module keeps those ideas explicit so learners can inspect the full flow
-//! before introducing asynchronous tasks, services, or deeper abstractions.
 
+use iced::time;
 use iced::widget::{button, column, container, row, text};
-use iced::{Element, Length, Task, Theme};
+use iced::{Alignment, Element, Length, Subscription, Task, Theme};
 use iced_aw::{TabLabel, Tabs};
 
-use crate::message::Message;
-use crate::pages;
+use crate::message::{MenuAction, Message};
+use crate::pages::{self, Page};
 use crate::state::SharedState;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Page {
-    Dashboard,
-    Layouts,
-    Controls,
-    DataFlow,
-    Windows,
-    Advanced,
-}
-
-impl Page {
-    pub const ALL: [Self; 6] = [
-        Self::Dashboard,
-        Self::Layouts,
-        Self::Controls,
-        Self::DataFlow,
-        Self::Windows,
-        Self::Advanced,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Dashboard => "Dashboard",
-            Self::Layouts => "Layouts",
-            Self::Controls => "Controls",
-            Self::DataFlow => "Data flow",
-            Self::Windows => "Windows",
-            Self::Advanced => "Advanced",
-        }
-    }
-
-    fn tab_label(self) -> TabLabel {
-        TabLabel::Text(self.label().into())
-    }
-}
+use crate::widgets;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DemoWindowState {
@@ -71,7 +34,6 @@ pub struct App {
     pub active_page: Page,
     pub shared: SharedState,
     pub window: DemoWindowState,
-    pub menu_open: bool,
 }
 
 impl Default for App {
@@ -80,7 +42,6 @@ impl Default for App {
             active_page: Page::Dashboard,
             shared: SharedState::default(),
             window: DemoWindowState::default(),
-            menu_open: false,
         }
     }
 }
@@ -88,7 +49,8 @@ impl Default for App {
 impl App {
     pub fn run() -> iced::Result {
         iced::application(Self::title, Self::update, Self::view)
-            .theme(|_| Theme::TokyoNight)
+            .subscription(Self::subscription)
+            .theme(Self::theme)
             .centered()
             .run_with(Self::boot)
     }
@@ -101,53 +63,134 @@ impl App {
         format!("Iced Learning Sandbox — {}", self.active_page.label())
     }
 
+    pub fn theme(&self) -> Theme {
+        if self.shared.dark_mode_demo {
+            Theme::TokyoNight
+        } else {
+            Theme::Light
+        }
+    }
+
+    pub fn subscription(&self) -> Subscription<Message> {
+        time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick)
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Navigate(page) => self.active_page = page,
+            Message::MenuSelected(action) => self.apply_menu_action(action),
             Message::SharedTextChanged(value) => self.shared.learner_name = value,
             Message::CounterIncremented => self.shared.shared_counter += 1,
             Message::CounterDecremented => self.shared.shared_counter -= 1,
-            Message::ToggleMenu => self.menu_open = !self.menu_open,
+            Message::ControlsToggled(value) => self.shared.controls_enabled = value,
+            Message::ControlsCheckboxChanged(value) => self.shared.controls_checked = value,
+            Message::ControlsSliderChanged(value) => self.shared.slider_value = value,
+            Message::ControlsChoiceSelected(choice) => self.shared.selected_control = choice,
+            Message::ProgressStepped => {
+                self.shared.progress_value = (self.shared.progress_value + 10).min(100)
+            }
+            Message::AdvancedThemeToggled(is_dark) => self.shared.dark_mode_demo = is_dark,
+            Message::Tick => self.shared.ticks += 1,
             Message::ToggleChildWindow => self.window.is_open = !self.window.is_open,
             Message::ResetSandbox => *self = Self::default(),
         }
 
+        self.shared.status_line = self.status_text();
         Task::none()
     }
 
-    pub fn navigation_items() -> Vec<(Page, &'static str)> {
-        Page::ALL
-            .into_iter()
-            .map(|page| (page, page.label()))
-            .collect()
+    pub fn apply_menu_action(&mut self, action: MenuAction) {
+        self.shared.last_menu_action = Some(action);
+
+        match action {
+            MenuAction::NewSandbox => *self = Self::default(),
+            MenuAction::OpenRecipe => {
+                self.active_page = Page::Layouts;
+                self.shared
+                    .notes
+                    .push("Opened the layout recipe from the dashboard menu.".into());
+            }
+            MenuAction::SaveSnapshot => {
+                self.shared.notes.push(format!(
+                    "Saved snapshot for {} with counter {}.",
+                    self.shared.learner_name, self.shared.shared_counter
+                ));
+            }
+            MenuAction::ExportCode => self.active_page = Page::DataFlow,
+            MenuAction::ToggleSidebarTips => {
+                self.shared.show_sidebar_tips = !self.shared.show_sidebar_tips
+            }
+            MenuAction::FocusControlsPage => self.active_page = Page::Controls,
+            MenuAction::OpenInspectorWindow => self.window.is_open = true,
+            MenuAction::ArrangeStudyLayout => self.active_page = Page::Windows,
+            MenuAction::ViewDocs => self.active_page = Page::Advanced,
+            MenuAction::AboutSandbox => self.active_page = Page::Dashboard,
+        }
+    }
+
+    fn status_text(&self) -> String {
+        let action = self
+            .shared
+            .last_menu_action
+            .map(MenuAction::label)
+            .unwrap_or("No menu action yet");
+
+        format!(
+            "Active page: {} • Last menu action: {} • Tick demo: {}",
+            self.active_page.label(),
+            action,
+            self.shared.ticks
+        )
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        // The navigation is intentionally implemented with iced_aw tabs so the
-        // codebase demonstrates an ecosystem widget early on.
         let tabs = Page::ALL.into_iter().fold(
             Tabs::new(Message::Navigate).set_active_tab(&self.active_page),
-            |tabs, page| tabs.push(page, page.tab_label(), self.page_content(page)),
+            |tabs, page| {
+                tabs.push(
+                    page,
+                    TabLabel::Text(page.label().into()),
+                    self.page_content(page),
+                )
+            },
         );
 
-        let header = row![
-            text("Iced learning sandbox").size(28),
-            button(if self.menu_open {
-                "Hide menu state"
-            } else {
-                "Show menu state"
-            })
-            .on_press(Message::ToggleMenu),
+        let header = column![
+            row![
+                text("Iced learning sandbox").size(30),
+                button("Reset all demos").on_press(Message::ResetSandbox),
+            ]
+            .spacing(16)
+            .align_y(Alignment::Center),
+            text(format!(
+                "A single shell hosts focused learning pages. Current lesson: {}",
+                self.active_page.lesson()
+            )),
+            widgets::status_banner(self.shared.status_line.clone()),
         ]
-        .spacing(16);
+        .spacing(12);
 
-        let content = column![
-            header,
-            text("Update mutates state; view renders the latest snapshot."),
-            tabs,
-        ]
-        .spacing(16)
-        .padding(20);
+        let footer = container(text(format!(
+            "Footer/status bar: sidebar tips {}, child window {}, current theme {}.",
+            if self.shared.show_sidebar_tips {
+                "enabled"
+            } else {
+                "hidden"
+            },
+            if self.window.is_open {
+                "open"
+            } else {
+                "closed"
+            },
+            if self.shared.dark_mode_demo {
+                "dark"
+            } else {
+                "light"
+            },
+        )))
+        .padding([10, 12]);
+
+        let content = column![header, tabs, footer].spacing(16).padding(20);
 
         container(content)
             .width(Length::Fill)
@@ -169,41 +212,47 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use super::{App, Page};
+    use super::App;
+    use crate::message::{MenuAction, Message};
+    use crate::pages::Page;
 
     #[test]
-    fn default_app_starts_on_dashboard() {
-        let app = App::default();
-        assert_eq!(app.active_page, Page::Dashboard);
+    fn navigation_messages_activate_expected_pages() {
+        for page in Page::ALL {
+            let mut app = App::default();
+            let _ = app.update(Message::Navigate(page));
+            assert_eq!(app.active_page, page);
+        }
     }
 
     #[test]
-    fn default_shared_state_is_consistent() {
-        let app = App::default();
-        assert_eq!(app.shared.learner_name, "Iced explorer");
-        assert_eq!(app.shared.shared_counter, 3);
-        assert_eq!(app.shared.notes.len(), 3);
-        assert!(!app.window.is_open);
-        assert!(!app.menu_open);
+    fn menu_actions_update_expected_state() {
+        let scenarios = [
+            (MenuAction::OpenRecipe, Page::Layouts),
+            (MenuAction::FocusControlsPage, Page::Controls),
+            (MenuAction::ArrangeStudyLayout, Page::Windows),
+            (MenuAction::ViewDocs, Page::Advanced),
+        ];
+
+        for (action, expected_page) in scenarios {
+            let mut app = App::default();
+            app.apply_menu_action(action);
+            assert_eq!(app.active_page, expected_page);
+            assert_eq!(app.shared.last_menu_action, Some(action));
+        }
     }
 
     #[test]
-    fn navigation_metadata_is_complete_and_unique() {
-        let items = App::navigation_items();
-        assert_eq!(items.len(), Page::ALL.len());
+    fn toggle_sidebar_menu_action_flips_visible_state() {
+        let mut app = App::default();
+        let start = app.shared.show_sidebar_tips;
 
-        let unique_labels: HashSet<_> = items.iter().map(|(_, label)| *label).collect();
-        let unique_pages: HashSet<_> = items.iter().map(|(page, _)| *page).collect();
+        app.apply_menu_action(MenuAction::ToggleSidebarTips);
 
-        assert_eq!(unique_labels.len(), items.len());
-        assert_eq!(unique_pages.len(), items.len());
-    }
-
-    #[test]
-    fn boot_produces_stable_defaults() {
-        let (booted, _task) = App::boot();
-        assert_eq!(booted, App::default());
+        assert_eq!(app.shared.show_sidebar_tips, !start);
+        assert_eq!(
+            app.shared.last_menu_action,
+            Some(MenuAction::ToggleSidebarTips)
+        );
     }
 }
