@@ -4,7 +4,7 @@
 //! function and the `update` function: widgets emit messages, and `update`
 //! handles them.
 
-use crate::pages::Page;
+use crate::pages::{data_flow::DataFlowMessage, Page};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
@@ -50,9 +50,16 @@ pub enum Message {
     ControlsChoiceSelected(ControlChoice),
     ProgressStepped,
     AdvancedThemeToggled(bool),
+    DataFlow(DataFlowMessage),
     Tick,
     ToggleChildWindow,
     ResetSandbox,
+}
+
+impl From<DataFlowMessage> for Message {
+    fn from(message: DataFlowMessage) -> Self {
+        Self::DataFlow(message)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,5 +86,23 @@ impl ControlChoice {
 impl std::fmt::Display for ControlChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Message;
+    use crate::pages::data_flow::DataFlowMessage;
+
+    #[test]
+    fn data_flow_messages_convert_into_root_messages() {
+        let message: Message = DataFlowMessage::ProfileNameEdited("Ava".into()).into();
+
+        match message {
+            Message::DataFlow(DataFlowMessage::ProfileNameEdited(value)) => {
+                assert_eq!(value, "Ava");
+            }
+            other => panic!("unexpected message: {other:?}"),
+        }
     }
 }
