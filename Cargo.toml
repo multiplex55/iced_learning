@@ -1,0 +1,30 @@
+[package]
+name = "iced_learning"
+version = "0.1.0"
+edition = "2021"
+description = "An educational Iced sandbox for exploring Rust GUI patterns."
+license = "MIT"
+publish = false
+
+[dependencies]
+iced = { version = "0.13.1", default-features = false, features = [
+    "wgpu",
+    "tiny-skia",
+    "fira-sans",
+    "auto-detect-theme",
+    "multi-window",
+    "tokio",
+    "advanced",
+    "svg",
+    "markdown",
+] }
+iced_aw = { version = "0.12.2", default-features = false, features = [
+    "tabs",
+    "menu",
+    "sidebar",
+    "card",
+    "badge",
+] }
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
