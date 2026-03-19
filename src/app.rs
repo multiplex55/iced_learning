@@ -10,7 +10,7 @@ use iced::{Alignment, Element, Length, Subscription, Task, Theme};
 use iced_aw::{TabLabel, Tabs};
 
 use crate::message::{MenuAction, Message};
-use crate::pages::{self, Page};
+use crate::pages::{self, data_flow::DataFlowMessage, Page};
 use crate::state::SharedState;
 use crate::widgets;
 
@@ -34,6 +34,14 @@ pub struct App {
     pub active_page: Page,
     pub shared: SharedState,
     pub window: DemoWindowState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SharedStateAction {
+    SetLearnerName { value: String, source: Page },
+    SetDashboardStatus { value: String, source: Page },
+    SetSidebarTipsVisible { value: bool, source: Page },
+    ResetDataFlowDemo { source: Page },
 }
 
 impl Default for App {
@@ -90,6 +98,7 @@ impl App {
                 self.shared.progress_value = (self.shared.progress_value + 10).min(100)
             }
             Message::AdvancedThemeToggled(is_dark) => self.shared.dark_mode_demo = is_dark,
+            Message::DataFlow(message) => self.apply_data_flow_message(message),
             Message::Tick => self.shared.ticks += 1,
             Message::ToggleChildWindow => self.window.is_open = !self.window.is_open,
             Message::ResetSandbox => *self = Self::default(),
@@ -97,6 +106,79 @@ impl App {
 
         self.shared.status_line = self.status_text();
         Task::none()
+    }
+
+    pub fn apply_shared_state_action(&mut self, action: SharedStateAction) {
+        match action {
+            SharedStateAction::SetLearnerName { value, source } => {
+                self.shared.learner_name = value;
+                self.shared.profile_last_changed_by = source;
+                self.shared.last_event = format!(
+                    "{} updated the shared learner profile to {:?}.",
+                    source.label(),
+                    self.shared.learner_name
+                );
+            }
+            SharedStateAction::SetDashboardStatus { value, source } => {
+                self.shared.dashboard_status = value;
+                self.shared.status_last_changed_by = source;
+                self.shared.last_event = format!(
+                    "{} updated the dashboard status to {:?}.",
+                    source.label(),
+                    self.shared.dashboard_status
+                );
+            }
+            SharedStateAction::SetSidebarTipsVisible { value, source } => {
+                self.shared.show_sidebar_tips = value;
+                self.shared.preference_last_changed_by = source;
+                self.shared.last_event = format!(
+                    "{} changed sidebar tips visibility to {}.",
+                    source.label(),
+                    value
+                );
+            }
+            SharedStateAction::ResetDataFlowDemo { source } => {
+                let defaults = SharedState::default();
+                self.shared.learner_name = defaults.learner_name;
+                self.shared.dashboard_status = defaults.dashboard_status;
+                self.shared.show_sidebar_tips = defaults.show_sidebar_tips;
+                self.shared.profile_last_changed_by = source;
+                self.shared.status_last_changed_by = source;
+                self.shared.preference_last_changed_by = source;
+                self.shared.last_event = format!(
+                    "{} reset the shared data-flow fields back to their defaults.",
+                    source.label()
+                );
+            }
+        }
+    }
+
+    pub fn apply_data_flow_message(&mut self, message: DataFlowMessage) {
+        let event = message.event_label();
+        let action = match message {
+            DataFlowMessage::ProfileNameEdited(value) => SharedStateAction::SetLearnerName {
+                value,
+                source: Page::DataFlow,
+            },
+            DataFlowMessage::DashboardStatusEdited(value) => {
+                SharedStateAction::SetDashboardStatus {
+                    value,
+                    source: Page::DataFlow,
+                }
+            }
+            DataFlowMessage::SidebarTipsToggled(value) => {
+                SharedStateAction::SetSidebarTipsVisible {
+                    value,
+                    source: Page::DataFlow,
+                }
+            }
+            DataFlowMessage::ResetSharedState => SharedStateAction::ResetDataFlowDemo {
+                source: Page::DataFlow,
+            },
+        };
+
+        self.apply_shared_state_action(action);
+        self.shared.last_event = format!("{event} → {}", self.shared.last_event);
     }
 
     pub fn apply_menu_action(&mut self, action: MenuAction) {
@@ -136,9 +218,10 @@ impl App {
             .unwrap_or("No menu action yet");
 
         format!(
-            "Active page: {} • Last menu action: {} • Tick demo: {}",
+            "Active page: {} • Last menu action: {} • Shared summary: {} • Tick demo: {}",
             self.active_page.label(),
             action,
+            self.shared.dashboard_summary(),
             self.shared.ticks
         )
     }
@@ -171,17 +254,9 @@ impl App {
         .spacing(12);
 
         let footer = container(text(format!(
-            "Footer/status bar: sidebar tips {}, child window {}, current theme {}.",
-            if self.shared.show_sidebar_tips {
-                "enabled"
-            } else {
-                "hidden"
-            },
-            if self.window.is_open {
-                "open"
-            } else {
-                "closed"
-            },
+            "Footer/status bar: {} Last shared event: {} Theme {}.",
+            self.shared.visibility_summary(),
+            self.shared.last_event,
             if self.shared.dark_mode_demo {
                 "dark"
             } else {
@@ -212,9 +287,9 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::App;
+    use super::{App, SharedStateAction};
     use crate::message::{MenuAction, Message};
-    use crate::pages::Page;
+    use crate::pages::{data_flow::DataFlowMessage, Page};
 
     #[test]
     fn navigation_messages_activate_expected_pages() {
@@ -254,5 +329,73 @@ mod tests {
             app.shared.last_menu_action,
             Some(MenuAction::ToggleSidebarTips)
         );
+    }
+
+    #[test]
+    fn shared_state_reducer_updates_all_data_flow_paths() {
+        let mut app = App::default();
+
+        app.apply_shared_state_action(SharedStateAction::SetLearnerName {
+            value: "Morgan".into(),
+            source: Page::DataFlow,
+        });
+        assert_eq!(app.shared.learner_name, "Morgan");
+        assert_eq!(app.shared.profile_last_changed_by, Page::DataFlow);
+
+        app.apply_shared_state_action(SharedStateAction::SetDashboardStatus {
+            value: "Preview synchronized".into(),
+            source: Page::DataFlow,
+        });
+        assert_eq!(app.shared.dashboard_status, "Preview synchronized");
+        assert_eq!(app.shared.status_last_changed_by, Page::DataFlow);
+
+        app.apply_shared_state_action(SharedStateAction::SetSidebarTipsVisible {
+            value: false,
+            source: Page::DataFlow,
+        });
+        assert!(!app.shared.show_sidebar_tips);
+        assert_eq!(app.shared.preference_last_changed_by, Page::DataFlow);
+    }
+
+    #[test]
+    fn data_flow_message_updates_expected_shared_fields() {
+        let mut app = App::default();
+
+        let _ = app.update(Message::DataFlow(DataFlowMessage::DashboardStatusEdited(
+            "Tracing message forwarding".into(),
+        )));
+
+        assert_eq!(app.shared.dashboard_status, "Tracing message forwarding");
+        assert_eq!(app.shared.status_last_changed_by, Page::DataFlow);
+        assert!(app
+            .shared
+            .last_event
+            .contains("DataFlow updated the dashboard status"));
+    }
+
+    #[test]
+    fn reset_data_flow_action_restores_defaults_cleanly() {
+        let mut app = App::default();
+        app.shared.learner_name = "Changed".into();
+        app.shared.dashboard_status = "Changed status".into();
+        app.shared.show_sidebar_tips = false;
+
+        app.apply_shared_state_action(SharedStateAction::ResetDataFlowDemo {
+            source: Page::DataFlow,
+        });
+
+        let defaults = App::default();
+        assert_eq!(app.shared.learner_name, defaults.shared.learner_name);
+        assert_eq!(
+            app.shared.dashboard_status,
+            defaults.shared.dashboard_status
+        );
+        assert_eq!(
+            app.shared.show_sidebar_tips,
+            defaults.shared.show_sidebar_tips
+        );
+        assert_eq!(app.shared.profile_last_changed_by, Page::DataFlow);
+        assert_eq!(app.shared.status_last_changed_by, Page::DataFlow);
+        assert_eq!(app.shared.preference_last_changed_by, Page::DataFlow);
     }
 }

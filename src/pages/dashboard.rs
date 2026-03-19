@@ -34,8 +34,19 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 "Accent helper in theme.rs: {}",
                 theme::accent_hex()
             )),
-            text(format!("Learner profile: {}", app.shared.learner_name)),
+            text(format!(
+                "Learner profile: {}",
+                app.shared.profile_preview_name()
+            )),
+            text(format!(
+                "Shared dashboard status: {}",
+                app.shared.dashboard_status
+            )),
             text(format!("Shared counter: {}", app.shared.shared_counter)),
+            text(format!(
+                "Derived dashboard summary: {}",
+                app.shared.dashboard_summary()
+            )),
             text(format!(
                 "Sidebar teaching tips visible: {}",
                 app.shared.show_sidebar_tips
