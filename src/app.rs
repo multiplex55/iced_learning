@@ -462,7 +462,7 @@ async fn simulate_async_lesson() -> String {
 #[cfg(test)]
 mod tests {
     use super::App;
-    use crate::message::{MenuAction, Message};
+    use crate::message::{ControlChoice, MenuAction, Message};
     use crate::pages::{data_flow::DataFlowMessage, windows::WindowKind, Page};
     use crate::state::reducer::SharedStateAction;
 
@@ -602,5 +602,36 @@ mod tests {
             .shared
             .last_event
             .contains("Dashboard updated the dashboard status"));
+    }
+
+    #[test]
+    fn controls_toggle_stores_disabled_state() {
+        let mut app = App::default();
+
+        let _ = app.update(Message::ControlsToggled(false));
+
+        assert!(!app.shared.controls_enabled);
+    }
+
+    #[test]
+    fn controls_toggle_re_enables_without_resetting_existing_values() {
+        let mut app = App::default();
+        app.shared.learner_name = "Morgan".into();
+        app.shared.shared_counter = 9;
+        app.shared.controls_checked = false;
+        app.shared.slider_value = 88;
+        app.shared.selected_control = ControlChoice::PickList;
+        app.shared.progress_value = 70;
+
+        let _ = app.update(Message::ControlsToggled(false));
+        let _ = app.update(Message::ControlsToggled(true));
+
+        assert!(app.shared.controls_enabled);
+        assert_eq!(app.shared.learner_name, "Morgan");
+        assert_eq!(app.shared.shared_counter, 9);
+        assert!(!app.shared.controls_checked);
+        assert_eq!(app.shared.slider_value, 88);
+        assert_eq!(app.shared.selected_control, ControlChoice::PickList);
+        assert_eq!(app.shared.progress_value, 70);
     }
 }
