@@ -51,7 +51,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 "Sidebar teaching tips visible: {}",
                 app.shared.show_sidebar_tips
             )),
-            text(format!("Inspector window open: {}", app.window.is_open)),
+            text(format!(
+                "Open child windows tracked: {}",
+                app.windows.open_count()
+            )),
         ]
         .spacing(8),
     );

@@ -4,7 +4,7 @@
 //! function and the `update` function: widgets emit messages, and `update`
 //! handles them.
 
-use crate::pages::{data_flow::DataFlowMessage, Page};
+use crate::pages::{data_flow::DataFlowMessage, windows::WindowKind, Page};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
@@ -52,7 +52,13 @@ pub enum Message {
     AdvancedThemeToggled(bool),
     DataFlow(DataFlowMessage),
     Tick,
-    ToggleChildWindow,
+    WindowOpenRequested(WindowKind),
+    WindowOpened(iced::window::Id),
+    WindowSelected(iced::window::Id),
+    WindowFocusRequested(iced::window::Id),
+    WindowCloseSelected,
+    WindowClosed(iced::window::Id),
+    WindowIncrementSelectedToolbox,
     ResetSandbox,
 }
 

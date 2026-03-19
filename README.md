@@ -22,7 +22,7 @@ The app starts on **Dashboard** and includes these extendable demo areas:
 - **Layouts**: simple `row`, `column`, spacing, and container composition examples.
 - **Controls**: text input and button-driven state updates.
 - **Data flow**: how shared state moves through the update/view loop.
-- **Windows**: placeholder state for future multi-window and modal experiments.
+- **Windows**: a dedicated multi-window demo that opens, focuses, closes, and cleans up tracked child-window state.
 - **Advanced**: notes for future markdown, SVG, menu, tabs, and richer `iced_aw` widget demos.
 
 ## Running the app
@@ -68,3 +68,12 @@ The dependency feature flags are written explicitly so learners can see which ca
 - `iced_aw`: `tabs`, `menu`, `sidebar`, `card`, and `badge` for ecosystem widget exploration.
 
 Add more crates only when a page actually needs them.
+
+
+## Multi-window demo notes
+
+The Windows page now uses Iced's `multi-window` feature to open real native child windows while keeping an explicit registry of `window::Id` values, window kinds, titles, and local payload/state.
+
+A useful constraint to understand in this codebase: the app currently uses the high-level `iced::application(...)` builder from Iced 0.13.x. That builder makes multi-window management possible, but it still renders the same top-level app view in each window and does not automatically attach the originating `window::Id` to normal widget messages. Because of that, this repository's window demo focuses on lifecycle management and state coordination instead of fully custom per-window widget trees.
+
+If you want distinct child-window UIs later, treat this demo as the stepping stone before switching the app to Iced's lower-level multi-window program API.
