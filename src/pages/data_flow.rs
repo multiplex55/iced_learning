@@ -94,7 +94,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             app.shared.learner_name,
             app.shared.dashboard_status,
             app.shared.show_sidebar_tips,
-            app.shared.dark_mode_demo,
+            app.shared.theme_choice.is_dark(),
         )),
         text(format!(
             "Which page changed the profile name? {}",
@@ -142,7 +142,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             "Where else can you see this state?",
             "Open Dashboard or watch the footer while editing the fields above. Those pages read the same shared state without owning conflicting copies.",
             column![
-                text(format!("Dashboard page label: {}", Page::Dashboard.label())),
+                text(format!("Dashboard page label: {} (id: {})", Page::Dashboard.label(), Page::Dashboard.id())),
                 text(format!("App shell status line: {}", app.shared.status_line)),
             ]
             .spacing(8),

@@ -22,8 +22,10 @@ The app starts on **Dashboard** and includes these extendable demo areas:
 - **Layouts**: simple `row`, `column`, spacing, and container composition examples.
 - **Controls**: text input and button-driven state updates.
 - **Data flow**: how shared state moves through the update/view loop.
+- **Forms / Validation**: controlled inputs, pure validation rules, and a submission summary.
+- **Async / Tasks**: a simulated background workflow with loading indicators and task completion messages.
 - **Windows**: a dedicated multi-window demo that opens, focuses, closes, and cleans up tracked child-window state.
-- **Advanced**: notes for future markdown, SVG, menu, tabs, and richer `iced_aw` widget demos.
+- **Styling / Theming**: theme switching, custom style closures, and notes on current Iced APIs.
 
 ## Running the app
 
@@ -44,8 +46,9 @@ cargo test
 - `src/app.rs`: the top-level `App` state, navigation, boot logic, and the central update/view flow.
 - `src/message.rs`: the messages emitted by widgets and handled by `App::update`.
 - `src/pages/`: focused demo pages grouped by learning topic.
-- `src/widgets/`: reusable helper widgets and view builders.
-- `src/state/`: shared state types that can outgrow `App` later.
+- `src/forms.rs`: pure form validation helpers used by the Forms page.
+- `src/menu.rs`: testable menu metadata mirrored by the `iced_aw` dashboard menu.
+- `src/state/`: shared state types and reducers that can outgrow `App` later.
 - `docs/`: lightweight notes for architecture, Iced concepts, and future experiments.
 
 ## Where to look first
@@ -57,6 +60,8 @@ If you are new to Iced, open files in this order:
 3. `src/message.rs`
 4. `src/pages/dashboard.rs`
 5. `src/pages/controls.rs`
+6. `src/pages/forms.rs`
+7. `src/pages/async_tasks.rs`
 
 That path shows the core Iced loop before you dive into extra pages.
 
@@ -69,6 +74,16 @@ The dependency feature flags are written explicitly so learners can see which ca
 
 Add more crates only when a page actually needs them.
 
+## Optimizations and best practices
+
+Use these rules of thumb while extending the sandbox:
+
+- Keep `view` functions declarative and small. If a page starts reading like a state machine, move the non-rendering logic into a helper module or reducer first.
+- Split page-local state from root-global state. The form draft and async demo are local to their lessons; the shared learner profile stays in `SharedState` because multiple pages read it.
+- Introduce helper widgets or helper functions when layout repetition makes the teaching goal harder to see. `widgets::section_card` is intentionally small enough that learners can still inspect the surrounding Iced code.
+- Minimize unnecessary cloning in messages and state. Prefer cheap enums and derived text helpers over cloning large view models into every message.
+- Avoid deeply nested layout builders by extracting sections into local variables or helper functions once a page has multiple teaching panels.
+- Organize messages for readability as the app grows. Page-specific message enums, like `DataFlowMessage`, are easier to reason about than a single giant flat enum.
 
 ## Multi-window demo notes
 

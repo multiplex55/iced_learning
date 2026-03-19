@@ -9,24 +9,52 @@ use iced::widget::{button, column, container, row, text};
 use iced::{window, Alignment, Element, Length, Subscription, Task, Theme};
 use iced_aw::{TabLabel, Tabs};
 
+use crate::forms::FormDraft;
 use crate::message::{MenuAction, Message};
 use crate::pages::{self, data_flow::DataFlowMessage, windows, Page};
+use crate::state::reducer::{apply_shared_state_action, SharedStateAction};
 use crate::state::SharedState;
 use crate::widgets;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsyncDemoState {
+    pub is_loading: bool,
+    pub completed_steps: u8,
+    pub total_steps: u8,
+    pub status: String,
+    pub last_result: String,
+}
+
+impl AsyncDemoState {
+    pub fn progress_ratio(&self) -> f32 {
+        if self.total_steps == 0 {
+            0.0
+        } else {
+            f32::from(self.completed_steps) / f32::from(self.total_steps)
+        }
+    }
+}
+
+impl Default for AsyncDemoState {
+    fn default() -> Self {
+        Self {
+            is_loading: false,
+            completed_steps: 0,
+            total_steps: 3,
+            status: "No async work running yet. Start a simulated fetch.".into(),
+            last_result: "No result yet".into(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct App {
     pub active_page: Page,
     pub shared: SharedState,
     pub windows: windows::WindowDemoState,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SharedStateAction {
-    SetLearnerName { value: String, source: Page },
-    SetDashboardStatus { value: String, source: Page },
-    SetSidebarTipsVisible { value: bool, source: Page },
-    ResetDataFlowDemo { source: Page },
+    pub form_draft: FormDraft,
+    pub form_submission_summary: String,
+    pub async_demo: AsyncDemoState,
 }
 
 impl Default for App {
@@ -35,6 +63,9 @@ impl Default for App {
             active_page: Page::Dashboard,
             shared: SharedState::default(),
             windows: windows::WindowDemoState::default(),
+            form_draft: FormDraft::example(),
+            form_submission_summary: "Submit the form to capture a stable summary.".into(),
+            async_demo: AsyncDemoState::default(),
         }
     }
 }
@@ -57,11 +88,7 @@ impl App {
     }
 
     pub fn theme(&self) -> Theme {
-        if self.shared.dark_mode_demo {
-            Theme::TokyoNight
-        } else {
-            Theme::Light
-        }
+        self.shared.theme_choice.to_iced_theme()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -86,9 +113,38 @@ impl App {
             Message::ProgressStepped => {
                 self.shared.progress_value = (self.shared.progress_value + 10).min(100)
             }
-            Message::AdvancedThemeToggled(is_dark) => self.shared.dark_mode_demo = is_dark,
+            Message::ThemeSelected(choice) => {
+                self.apply_shared_state_action(SharedStateAction::SetThemeChoice {
+                    value: choice,
+                    source: Page::Advanced,
+                });
+            }
             Message::DataFlow(message) => self.apply_data_flow_message(message),
             Message::Tick => self.shared.ticks += 1,
+            Message::FormNameChanged(value) => self.form_draft.name = value,
+            Message::FormEmailChanged(value) => self.form_draft.email = value,
+            Message::FormGoalChanged(value) => self.form_draft.goal = value,
+            Message::FormLoadExample => self.form_draft = FormDraft::example(),
+            Message::FormSubmitted => {
+                self.form_submission_summary = self.form_draft.submission_summary();
+                self.shared.last_event = format!(
+                    "Forms page submitted a valid draft for {}.",
+                    self.form_draft.name.trim()
+                );
+            }
+            Message::AsyncStarted => {
+                self.async_demo.is_loading = true;
+                self.async_demo.status = "Simulating async work with Task::perform...".into();
+                return Task::perform(simulate_async_lesson(), Message::AsyncFinished);
+            }
+            Message::AsyncFinished(result) => {
+                self.async_demo.is_loading = false;
+                self.async_demo.completed_steps = self.async_demo.total_steps;
+                self.async_demo.status =
+                    "Async lesson finished. Review the result text below.".into();
+                self.async_demo.last_result = result;
+            }
+            Message::AsyncReset => self.async_demo = AsyncDemoState::default(),
             Message::WindowOpenRequested(kind) => {
                 return windows::open_window_task(&mut self.windows, kind)
             }
@@ -115,48 +171,7 @@ impl App {
     }
 
     pub fn apply_shared_state_action(&mut self, action: SharedStateAction) {
-        match action {
-            SharedStateAction::SetLearnerName { value, source } => {
-                self.shared.learner_name = value;
-                self.shared.profile_last_changed_by = source;
-                self.shared.last_event = format!(
-                    "{} updated the shared learner profile to {:?}.",
-                    source.label(),
-                    self.shared.learner_name
-                );
-            }
-            SharedStateAction::SetDashboardStatus { value, source } => {
-                self.shared.dashboard_status = value;
-                self.shared.status_last_changed_by = source;
-                self.shared.last_event = format!(
-                    "{} updated the dashboard status to {:?}.",
-                    source.label(),
-                    self.shared.dashboard_status
-                );
-            }
-            SharedStateAction::SetSidebarTipsVisible { value, source } => {
-                self.shared.show_sidebar_tips = value;
-                self.shared.preference_last_changed_by = source;
-                self.shared.last_event = format!(
-                    "{} changed sidebar tips visibility to {}.",
-                    source.label(),
-                    value
-                );
-            }
-            SharedStateAction::ResetDataFlowDemo { source } => {
-                let defaults = SharedState::default();
-                self.shared.learner_name = defaults.learner_name;
-                self.shared.dashboard_status = defaults.dashboard_status;
-                self.shared.show_sidebar_tips = defaults.show_sidebar_tips;
-                self.shared.profile_last_changed_by = source;
-                self.shared.status_last_changed_by = source;
-                self.shared.preference_last_changed_by = source;
-                self.shared.last_event = format!(
-                    "{} reset the shared data-flow fields back to their defaults.",
-                    source.label()
-                );
-            }
-        }
+        apply_shared_state_action(&mut self.shared, action);
     }
 
     pub fn apply_data_flow_message(&mut self, message: DataFlowMessage) {
@@ -227,10 +242,11 @@ impl App {
             .unwrap_or("No menu action yet");
 
         format!(
-            "Active page: {} • Last menu action: {} • Shared summary: {} • Open windows: {} • Tick demo: {}",
+            "Active page: {} • Last menu action: {} • Shared summary: {} • Theme: {} • Open windows: {} • Tick demo: {}",
             self.active_page.label(),
             action,
             self.shared.dashboard_summary(),
+            self.shared.theme_choice.label(),
             self.windows.open_count(),
             self.shared.ticks
         )
@@ -267,11 +283,7 @@ impl App {
             "Footer/status bar: {} Last shared event: {} Theme {}.",
             self.shared.visibility_summary(),
             self.shared.last_event,
-            if self.shared.dark_mode_demo {
-                "dark"
-            } else {
-                "light"
-            },
+            self.shared.theme_choice.label(),
         )))
         .padding([10, 12]);
 
@@ -289,17 +301,25 @@ impl App {
             Page::Layouts => pages::layouts::view(self),
             Page::Controls => pages::controls::view(self),
             Page::DataFlow => pages::data_flow::view(self),
+            Page::Forms => pages::forms::view(self),
+            Page::AsyncTasks => pages::async_tasks::view(self),
             Page::Windows => pages::windows::view(self),
             Page::Advanced => pages::advanced::view(self),
         }
     }
 }
 
+async fn simulate_async_lesson() -> String {
+    std::thread::sleep(std::time::Duration::from_millis(40));
+    "Fetched lesson outline: keep async state local, keep view declarative, and return messages when work completes.".into()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{App, SharedStateAction};
+    use super::App;
     use crate::message::{MenuAction, Message};
     use crate::pages::{data_flow::DataFlowMessage, windows::WindowKind, Page};
+    use crate::state::reducer::SharedStateAction;
 
     #[test]
     fn navigation_messages_activate_expected_pages() {
@@ -405,6 +425,7 @@ mod tests {
         app.shared.learner_name = "Changed".into();
         app.shared.dashboard_status = "Changed status".into();
         app.shared.show_sidebar_tips = false;
+        app.shared.theme_choice = crate::theme::ThemeChoice::HighContrast;
 
         app.apply_shared_state_action(SharedStateAction::ResetDataFlowDemo {
             source: Page::DataFlow,
@@ -420,8 +441,34 @@ mod tests {
             app.shared.show_sidebar_tips,
             defaults.shared.show_sidebar_tips
         );
+        assert_eq!(app.shared.theme_choice, defaults.shared.theme_choice);
         assert_eq!(app.shared.profile_last_changed_by, Page::DataFlow);
         assert_eq!(app.shared.status_last_changed_by, Page::DataFlow);
         assert_eq!(app.shared.preference_last_changed_by, Page::DataFlow);
+    }
+
+    #[test]
+    fn forms_submission_regression_updates_summary_without_validation_logic_in_view() {
+        let mut app = App::default();
+        app.form_draft = crate::forms::FormDraft::example();
+
+        let _ = app.update(Message::FormSubmitted);
+
+        assert!(app.form_submission_summary.contains("plans to"));
+        assert!(app.shared.last_event.contains("Forms page submitted"));
+    }
+
+    #[test]
+    fn async_reset_restores_idle_state() {
+        let mut app = App::default();
+        app.async_demo.is_loading = true;
+        app.async_demo.completed_steps = 3;
+        app.async_demo.last_result = "done".into();
+
+        let _ = app.update(Message::AsyncReset);
+
+        assert!(!app.async_demo.is_loading);
+        assert_eq!(app.async_demo.completed_steps, 0);
+        assert_eq!(app.async_demo.last_result, "No result yet");
     }
 }
