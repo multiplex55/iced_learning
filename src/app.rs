@@ -6,34 +6,19 @@
 
 use iced::time;
 use iced::widget::{button, column, container, row, text};
-use iced::{Alignment, Element, Length, Subscription, Task, Theme};
+use iced::{window, Alignment, Element, Length, Subscription, Task, Theme};
 use iced_aw::{TabLabel, Tabs};
 
 use crate::message::{MenuAction, Message};
-use crate::pages::{self, data_flow::DataFlowMessage, Page};
+use crate::pages::{self, data_flow::DataFlowMessage, windows, Page};
 use crate::state::SharedState;
 use crate::widgets;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DemoWindowState {
-    pub is_open: bool,
-    pub title: String,
-}
-
-impl Default for DemoWindowState {
-    fn default() -> Self {
-        Self {
-            is_open: false,
-            title: "Inspector".into(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct App {
     pub active_page: Page,
     pub shared: SharedState,
-    pub window: DemoWindowState,
+    pub windows: windows::WindowDemoState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +34,7 @@ impl Default for App {
         Self {
             active_page: Page::Dashboard,
             shared: SharedState::default(),
-            window: DemoWindowState::default(),
+            windows: windows::WindowDemoState::default(),
         }
     }
 }
@@ -80,7 +65,11 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick)
+        Subscription::batch([
+            time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick),
+            window::open_events().map(Message::WindowOpened),
+            window::close_events().map(Message::WindowClosed),
+        ])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -100,7 +89,24 @@ impl App {
             Message::AdvancedThemeToggled(is_dark) => self.shared.dark_mode_demo = is_dark,
             Message::DataFlow(message) => self.apply_data_flow_message(message),
             Message::Tick => self.shared.ticks += 1,
-            Message::ToggleChildWindow => self.window.is_open = !self.window.is_open,
+            Message::WindowOpenRequested(kind) => {
+                return windows::open_window_task(&mut self.windows, kind)
+            }
+            Message::WindowOpened(id) => self.windows.mark_opened(id),
+            Message::WindowSelected(id) => self.windows.select(id),
+            Message::WindowFocusRequested(id) => {
+                self.windows.mark_focused(id);
+                return window::gain_focus(id);
+            }
+            Message::WindowCloseSelected => {
+                if let Some(id) = self.windows.close_selected() {
+                    return window::close(id);
+                }
+            }
+            Message::WindowClosed(id) => {
+                self.windows.mark_closed(id);
+            }
+            Message::WindowIncrementSelectedToolbox => self.windows.increment_selected_toolbox(),
             Message::ResetSandbox => *self = Self::default(),
         }
 
@@ -203,7 +209,10 @@ impl App {
                 self.shared.show_sidebar_tips = !self.shared.show_sidebar_tips
             }
             MenuAction::FocusControlsPage => self.active_page = Page::Controls,
-            MenuAction::OpenInspectorWindow => self.window.is_open = true,
+            MenuAction::OpenInspectorWindow => {
+                self.active_page = Page::Windows;
+                self.windows.status = "Use the Windows page button to spawn the inspector so the demo can register its handle and lifecycle cleanly.".into();
+            }
             MenuAction::ArrangeStudyLayout => self.active_page = Page::Windows,
             MenuAction::ViewDocs => self.active_page = Page::Advanced,
             MenuAction::AboutSandbox => self.active_page = Page::Dashboard,
@@ -218,10 +227,11 @@ impl App {
             .unwrap_or("No menu action yet");
 
         format!(
-            "Active page: {} • Last menu action: {} • Shared summary: {} • Tick demo: {}",
+            "Active page: {} • Last menu action: {} • Shared summary: {} • Open windows: {} • Tick demo: {}",
             self.active_page.label(),
             action,
             self.shared.dashboard_summary(),
+            self.windows.open_count(),
             self.shared.ticks
         )
     }
@@ -289,7 +299,7 @@ impl App {
 mod tests {
     use super::{App, SharedStateAction};
     use crate::message::{MenuAction, Message};
-    use crate::pages::{data_flow::DataFlowMessage, Page};
+    use crate::pages::{data_flow::DataFlowMessage, windows::WindowKind, Page};
 
     #[test]
     fn navigation_messages_activate_expected_pages() {
@@ -371,6 +381,22 @@ mod tests {
             .shared
             .last_event
             .contains("DataFlow updated the dashboard status"));
+    }
+
+    #[test]
+    fn window_messages_update_registry_counts_and_identifiers() {
+        let mut app = App::default();
+        let id = iced::window::Id::unique();
+
+        app.windows.register_open_request(id, WindowKind::Toolbox);
+        let _ = app.update(Message::WindowOpened(id));
+        let _ = app.update(Message::WindowSelected(id));
+        let _ = app.update(Message::WindowIncrementSelectedToolbox);
+        let _ = app.update(Message::WindowClosed(id));
+
+        assert_eq!(app.windows.open_count(), 0);
+        assert_eq!(app.windows.selected, None);
+        assert!(app.windows.status.contains("Registry cleanup"));
     }
 
     #[test]
