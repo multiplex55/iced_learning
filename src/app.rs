@@ -542,6 +542,102 @@ mod tests {
     }
 
     #[test]
+    fn window_selection_transitions_keep_action_availability_in_sync() {
+        let mut app = App::default();
+        let toolbox_id = iced::window::Id::unique();
+
+        app.windows
+            .register_open_request(toolbox_id, WindowKind::Toolbox);
+        assert_eq!(
+            app.windows.action_availability(),
+            crate::pages::windows::WindowActionAvailability {
+                has_selected_open_window: false,
+                selected_record_is_open: false,
+                selected_record_is_open_toolbox: false,
+            }
+        );
+
+        let _ = app.update(Message::WindowOpened(toolbox_id));
+        assert_eq!(
+            app.windows.action_availability(),
+            crate::pages::windows::WindowActionAvailability {
+                has_selected_open_window: true,
+                selected_record_is_open: true,
+                selected_record_is_open_toolbox: true,
+            }
+        );
+
+        let _ = app.update(Message::WindowSelected(toolbox_id));
+        assert_eq!(
+            app.windows.action_availability(),
+            crate::pages::windows::WindowActionAvailability {
+                has_selected_open_window: true,
+                selected_record_is_open: true,
+                selected_record_is_open_toolbox: true,
+            }
+        );
+
+        let before = app
+            .windows
+            .selected_record()
+            .expect("selected toolbox record")
+            .local
+            .local_counter;
+        let _ = app.update(Message::WindowIncrementSelectedToolbox);
+        let after = app
+            .windows
+            .selected_record()
+            .expect("selected toolbox record")
+            .local
+            .local_counter;
+        assert_eq!(after, before + 1);
+        assert_eq!(
+            app.windows.action_availability(),
+            crate::pages::windows::WindowActionAvailability {
+                has_selected_open_window: true,
+                selected_record_is_open: true,
+                selected_record_is_open_toolbox: true,
+            }
+        );
+
+        let _ = app.update(Message::WindowClosed(toolbox_id));
+        assert_eq!(
+            app.windows.action_availability(),
+            crate::pages::windows::WindowActionAvailability {
+                has_selected_open_window: false,
+                selected_record_is_open: false,
+                selected_record_is_open_toolbox: false,
+            }
+        );
+    }
+
+    #[test]
+    fn selecting_non_toolbox_window_keeps_toolbox_action_disabled() {
+        let mut app = App::default();
+        let preview_id = iced::window::Id::unique();
+
+        app.windows
+            .register_open_request(preview_id, WindowKind::Preview);
+        let _ = app.update(Message::WindowOpened(preview_id));
+        let _ = app.update(Message::WindowSelected(preview_id));
+
+        assert_eq!(
+            app.windows.action_availability(),
+            crate::pages::windows::WindowActionAvailability {
+                has_selected_open_window: true,
+                selected_record_is_open: true,
+                selected_record_is_open_toolbox: false,
+            }
+        );
+
+        let _ = app.update(Message::WindowIncrementSelectedToolbox);
+        assert!(app
+            .windows
+            .status
+            .contains("Select a toolbox window to demonstrate local child state."));
+    }
+
+    #[test]
     fn export_actions_have_distinct_semantics() {
         let mut app = App::default();
         app.shared.learner_name = "Ava".into();
