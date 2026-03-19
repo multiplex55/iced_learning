@@ -3,6 +3,7 @@
 //! The page registry is intentionally data-driven so unit tests can verify the
 //! order and labels without needing to render a GUI.
 
+pub mod about;
 pub mod advanced;
 pub mod async_tasks;
 pub mod controls;
@@ -22,6 +23,7 @@ pub enum Page {
     AsyncTasks,
     Windows,
     Advanced,
+    About,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +34,7 @@ pub struct PageMeta {
     pub lesson: &'static str,
 }
 
-pub const PAGE_REGISTRY: [PageMeta; 8] = [
+pub const PAGE_REGISTRY: [PageMeta; 9] = [
     PageMeta {
         page: Page::Dashboard,
         id: "dashboard",
@@ -81,10 +83,16 @@ pub const PAGE_REGISTRY: [PageMeta; 8] = [
         label: "Advanced",
         lesson: "Styling, theming, subscriptions, overlays, and richer composition patterns.",
     },
+    PageMeta {
+        page: Page::About,
+        id: "about-sandbox",
+        label: "About",
+        lesson: "Project purpose, version metadata, and what this sandbox is designed to teach.",
+    },
 ];
 
 impl Page {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Dashboard,
         Self::Layouts,
         Self::Controls,
@@ -93,6 +101,7 @@ impl Page {
         Self::AsyncTasks,
         Self::Windows,
         Self::Advanced,
+        Self::About,
     ];
 
     pub fn label(self) -> &'static str {
@@ -135,6 +144,7 @@ mod tests {
                 Page::AsyncTasks,
                 Page::Windows,
                 Page::Advanced,
+                Page::About,
             ]
         );
     }
@@ -153,7 +163,8 @@ mod tests {
                 "Forms",
                 "Async/Tasks",
                 "Windows",
-                "Advanced"
+                "Advanced",
+                "About"
             ]
         );
     }

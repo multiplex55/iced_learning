@@ -10,14 +10,16 @@ use crate::theme::ThemeChoice;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     NewSandbox,
-    OpenRecipe,
+    OpenLayoutRecipe,
+    OpenDataFlowWalkthrough,
     SaveSnapshot,
-    ExportCode,
+    ExportRustModule,
+    ShowTeachingNotes,
     ToggleSidebarTips,
     FocusControlsPage,
     OpenInspectorWindow,
     ArrangeStudyLayout,
-    ViewDocs,
+    OpenIcedDocsLesson,
     AboutSandbox,
 }
 
@@ -25,15 +27,17 @@ impl MenuAction {
     pub fn label(self) -> &'static str {
         match self {
             Self::NewSandbox => "File → New Sandbox",
-            Self::OpenRecipe => "File → Open → Layout Recipe",
+            Self::OpenLayoutRecipe => "File → Open → Layout Recipe",
+            Self::OpenDataFlowWalkthrough => "File → Open → Data Flow Walkthrough",
             Self::SaveSnapshot => "File → Save Snapshot",
-            Self::ExportCode => "File → Export → Rust Module",
+            Self::ExportRustModule => "File → Export → Rust Module",
+            Self::ShowTeachingNotes => "File → Export → Show Teaching Notes",
             Self::ToggleSidebarTips => "View → Toggle Sidebar Tips",
             Self::FocusControlsPage => "View → Jump to Controls",
             Self::OpenInspectorWindow => "Window → Open Inspector",
             Self::ArrangeStudyLayout => "Window → Arrange Study Layout",
-            Self::ViewDocs => "Help → View Iced Docs",
-            Self::AboutSandbox => "Help → About",
+            Self::OpenIcedDocsLesson => "Help → Open Iced docs lesson",
+            Self::AboutSandbox => "Help → About Sandbox",
         }
     }
 }
