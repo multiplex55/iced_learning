@@ -131,6 +131,39 @@ impl WindowRecord {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowActionAvailability {
+    pub has_selected_open_window: bool,
+    pub selected_record_is_open: bool,
+    pub selected_record_is_open_toolbox: bool,
+}
+
+impl WindowActionAvailability {
+    pub fn focus_enabled(self) -> bool {
+        self.has_selected_open_window
+    }
+
+    pub fn close_enabled(self) -> bool {
+        self.selected_record_is_open
+    }
+
+    pub fn bump_toolbox_enabled(self) -> bool {
+        self.selected_record_is_open_toolbox
+    }
+
+    pub fn disabled_reason(self) -> &'static str {
+        if self.selected_record_is_open_toolbox {
+            "Toolbox-only demo is ready: the local counter button works because the selected record is an open toolbox window."
+        } else if self.selected_record_is_open {
+            "The selected window is open, so focus and close are available. The local counter demo stays disabled until you select an open toolbox window."
+        } else if self.has_selected_open_window {
+            "Select an open tracked window to use focus or close actions. The toolbox counter demo only works for an open toolbox selection."
+        } else {
+            "Select an open window first. The toolbox counter demo only enables when that selected record is an open toolbox window."
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowDemoState {
     pub records: Vec<WindowRecord>,
@@ -178,6 +211,24 @@ impl WindowDemoState {
     pub fn selected_record_mut(&mut self) -> Option<&mut WindowRecord> {
         let selected = self.selected?;
         self.records.iter_mut().find(|record| record.id == selected)
+    }
+
+    pub fn action_availability(&self) -> WindowActionAvailability {
+        let selected_record = self.selected_record();
+        let has_selected_open_window = self.selected.is_some_and(|selected| {
+            self.records
+                .iter()
+                .any(|record| record.id == selected && record.is_open)
+        });
+        let selected_record_is_open = selected_record.is_some_and(|record| record.is_open);
+        let selected_record_is_open_toolbox = selected_record
+            .is_some_and(|record| record.is_open && matches!(record.kind, WindowKind::Toolbox));
+
+        WindowActionAvailability {
+            has_selected_open_window,
+            selected_record_is_open,
+            selected_record_is_open_toolbox,
+        }
     }
 
     pub fn register_open_request(&mut self, id: window::Id, kind: WindowKind) {
@@ -334,6 +385,7 @@ pub fn open_window_task(state: &mut WindowDemoState, kind: WindowKind) -> Task<M
 pub fn view(app: &App) -> Element<'_, Message> {
     let window_state = &app.windows;
     let selected_record = window_state.selected_record();
+    let availability = window_state.action_availability();
 
     let actions = widgets::section_card(
         "Window controls",
@@ -358,14 +410,23 @@ pub fn view(app: &App) -> Element<'_, Message> {
             ]
             .spacing(10),
             row![
-                button("Focus selected")
-                    .on_press_maybe(window_state.selected.map(Message::WindowFocusRequested)),
+                button("Focus selected").on_press_maybe(
+                    availability
+                        .focus_enabled()
+                        .then(|| window_state.selected)
+                        .flatten()
+                        .map(Message::WindowFocusRequested),
+                ),
                 button("Close selected")
-                    .on_press(Message::WindowCloseSelected),
-                button("Bump selected toolbox counter")
-                    .on_press(Message::WindowIncrementSelectedToolbox),
+                    .on_press_maybe(availability.close_enabled().then_some(Message::WindowCloseSelected)),
+                button("Bump selected toolbox counter").on_press_maybe(
+                    availability
+                        .bump_toolbox_enabled()
+                        .then_some(Message::WindowIncrementSelectedToolbox),
+                ),
             ]
             .spacing(10),
+            text(availability.disabled_reason()),
             text("Lifecycle note: singleton windows like Inspector and Notes are deduplicated intentionally; Preview and Toolbox windows may be opened multiple times."),
         ]
         .spacing(12),
@@ -462,8 +523,79 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ChildWindowState, WindowDemoState, WindowKind, WindowRecord};
+    use super::{
+        ChildWindowState, WindowActionAvailability, WindowDemoState, WindowKind, WindowRecord,
+    };
     use iced::window;
+
+    #[test]
+    fn action_availability_is_disabled_when_nothing_is_selected() {
+        let state = WindowDemoState::default();
+
+        assert_eq!(
+            state.action_availability(),
+            WindowActionAvailability {
+                has_selected_open_window: false,
+                selected_record_is_open: false,
+                selected_record_is_open_toolbox: false,
+            }
+        );
+    }
+
+    #[test]
+    fn action_availability_for_non_toolbox_selection_enables_focus_and_close_only() {
+        let mut state = WindowDemoState::default();
+        let id = window::Id::unique();
+        state.register_open_request(id, WindowKind::Preview);
+        state.mark_opened(id);
+        state.select(id);
+
+        assert_eq!(
+            state.action_availability(),
+            WindowActionAvailability {
+                has_selected_open_window: true,
+                selected_record_is_open: true,
+                selected_record_is_open_toolbox: false,
+            }
+        );
+    }
+
+    #[test]
+    fn action_availability_for_toolbox_selection_enables_all_selection_actions() {
+        let mut state = WindowDemoState::default();
+        let id = window::Id::unique();
+        state.register_open_request(id, WindowKind::Toolbox);
+        state.mark_opened(id);
+        state.select(id);
+
+        assert_eq!(
+            state.action_availability(),
+            WindowActionAvailability {
+                has_selected_open_window: true,
+                selected_record_is_open: true,
+                selected_record_is_open_toolbox: true,
+            }
+        );
+    }
+
+    #[test]
+    fn action_availability_resets_after_selected_window_is_closed_and_removed() {
+        let mut state = WindowDemoState::default();
+        let id = window::Id::unique();
+        state.register_open_request(id, WindowKind::Toolbox);
+        state.mark_opened(id);
+        state.select(id);
+        assert!(state.mark_closed(id));
+
+        assert_eq!(
+            state.action_availability(),
+            WindowActionAvailability {
+                has_selected_open_window: false,
+                selected_record_is_open: false,
+                selected_record_is_open_toolbox: false,
+            }
+        );
+    }
 
     #[test]
     fn helper_maps_window_kinds_to_stable_titles_and_metadata() {
