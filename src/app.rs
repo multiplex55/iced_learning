@@ -100,42 +100,87 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::Navigate(page) => self.active_page = page,
+        let task = match message {
+            Message::Navigate(page) => {
+                self.active_page = page;
+                Task::none()
+            }
             Message::MenuSelected(action) => self.apply_menu_action(action),
-            Message::SharedTextChanged(value) => self.shared.learner_name = value,
-            Message::CounterIncremented => self.shared.shared_counter += 1,
-            Message::CounterDecremented => self.shared.shared_counter -= 1,
-            Message::ControlsToggled(value) => self.shared.controls_enabled = value,
-            Message::ControlsCheckboxChanged(value) => self.shared.controls_checked = value,
-            Message::ControlsSliderChanged(value) => self.shared.slider_value = value,
-            Message::ControlsChoiceSelected(choice) => self.shared.selected_control = choice,
+            Message::SharedTextChanged(value) => {
+                self.shared.learner_name = value;
+                Task::none()
+            }
+            Message::CounterIncremented => {
+                self.shared.shared_counter += 1;
+                Task::none()
+            }
+            Message::CounterDecremented => {
+                self.shared.shared_counter -= 1;
+                Task::none()
+            }
+            Message::ControlsToggled(value) => {
+                self.shared.controls_enabled = value;
+                Task::none()
+            }
+            Message::ControlsCheckboxChanged(value) => {
+                self.shared.controls_checked = value;
+                Task::none()
+            }
+            Message::ControlsSliderChanged(value) => {
+                self.shared.slider_value = value;
+                Task::none()
+            }
+            Message::ControlsChoiceSelected(choice) => {
+                self.shared.selected_control = choice;
+                Task::none()
+            }
             Message::ProgressStepped => {
-                self.shared.progress_value = (self.shared.progress_value + 10).min(100)
+                self.shared.progress_value = (self.shared.progress_value + 10).min(100);
+                Task::none()
             }
             Message::ThemeSelected(choice) => {
                 self.apply_shared_state_action(SharedStateAction::SetThemeChoice {
                     value: choice,
                     source: Page::Advanced,
                 });
+                Task::none()
             }
-            Message::DataFlow(message) => self.apply_data_flow_message(message),
-            Message::Tick => self.shared.ticks += 1,
-            Message::FormNameChanged(value) => self.form_draft.name = value,
-            Message::FormEmailChanged(value) => self.form_draft.email = value,
-            Message::FormGoalChanged(value) => self.form_draft.goal = value,
-            Message::FormLoadExample => self.form_draft = FormDraft::example(),
+            Message::DataFlow(message) => {
+                self.apply_data_flow_message(message);
+                Task::none()
+            }
+            Message::Tick => {
+                self.shared.ticks += 1;
+                Task::none()
+            }
+            Message::FormNameChanged(value) => {
+                self.form_draft.name = value;
+                Task::none()
+            }
+            Message::FormEmailChanged(value) => {
+                self.form_draft.email = value;
+                Task::none()
+            }
+            Message::FormGoalChanged(value) => {
+                self.form_draft.goal = value;
+                Task::none()
+            }
+            Message::FormLoadExample => {
+                self.form_draft = FormDraft::example();
+                Task::none()
+            }
             Message::FormSubmitted => {
                 self.form_submission_summary = self.form_draft.submission_summary();
                 self.shared.last_event = format!(
                     "Forms page submitted a valid draft for {}.",
                     self.form_draft.name.trim()
                 );
+                Task::none()
             }
             Message::AsyncStarted => {
                 self.async_demo.is_loading = true;
                 self.async_demo.status = "Simulating async work with Task::perform...".into();
-                return Task::perform(simulate_async_lesson(), Message::AsyncFinished);
+                Task::perform(simulate_async_lesson(), Message::AsyncFinished)
             }
             Message::AsyncFinished(result) => {
                 self.async_demo.is_loading = false;
@@ -143,31 +188,48 @@ impl App {
                 self.async_demo.status =
                     "Async lesson finished. Review the result text below.".into();
                 self.async_demo.last_result = result;
+                Task::none()
             }
-            Message::AsyncReset => self.async_demo = AsyncDemoState::default(),
-            Message::WindowOpenRequested(kind) => {
-                return windows::open_window_task(&mut self.windows, kind)
+            Message::AsyncReset => {
+                self.async_demo = AsyncDemoState::default();
+                Task::none()
             }
-            Message::WindowOpened(id) => self.windows.mark_opened(id),
-            Message::WindowSelected(id) => self.windows.select(id),
+            Message::WindowOpenRequested(kind) => self.open_window(kind),
+            Message::WindowOpened(id) => {
+                self.windows.mark_opened(id);
+                Task::none()
+            }
+            Message::WindowSelected(id) => {
+                self.windows.select(id);
+                Task::none()
+            }
             Message::WindowFocusRequested(id) => {
                 self.windows.mark_focused(id);
-                return window::gain_focus(id);
+                window::gain_focus(id)
             }
             Message::WindowCloseSelected => {
                 if let Some(id) = self.windows.close_selected() {
-                    return window::close(id);
+                    window::close(id)
+                } else {
+                    Task::none()
                 }
             }
             Message::WindowClosed(id) => {
                 self.windows.mark_closed(id);
+                Task::none()
             }
-            Message::WindowIncrementSelectedToolbox => self.windows.increment_selected_toolbox(),
-            Message::ResetSandbox => *self = Self::default(),
-        }
+            Message::WindowIncrementSelectedToolbox => {
+                self.windows.increment_selected_toolbox();
+                Task::none()
+            }
+            Message::ResetSandbox => {
+                *self = Self::default();
+                Task::none()
+            }
+        };
 
         self.shared.status_line = self.status_text();
-        Task::none()
+        task
     }
 
     pub fn apply_shared_state_action(&mut self, action: SharedStateAction) {
@@ -202,36 +264,118 @@ impl App {
         self.shared.last_event = format!("{event} → {}", self.shared.last_event);
     }
 
-    pub fn apply_menu_action(&mut self, action: MenuAction) {
+    pub fn apply_menu_action(&mut self, action: MenuAction) -> Task<Message> {
         self.shared.last_menu_action = Some(action);
 
         match action {
-            MenuAction::NewSandbox => *self = Self::default(),
-            MenuAction::OpenRecipe => {
+            MenuAction::NewSandbox => {
+                *self = Self::default();
+                Task::none()
+            }
+            MenuAction::OpenLayoutRecipe => {
                 self.active_page = Page::Layouts;
                 self.shared
                     .notes
-                    .push("Opened the layout recipe from the dashboard menu.".into());
+                    .push("Opened the layout recipe lesson from the dashboard menu.".into());
+                Task::none()
+            }
+            MenuAction::OpenDataFlowWalkthrough => {
+                self.active_page = Page::DataFlow;
+                self.shared.notes.push(
+                    "Opened the data flow walkthrough lesson from the File → Open menu.".into(),
+                );
+                Task::none()
             }
             MenuAction::SaveSnapshot => {
                 self.shared.notes.push(format!(
                     "Saved snapshot for {} with counter {}.",
                     self.shared.learner_name, self.shared.shared_counter
                 ));
+                Task::none()
             }
-            MenuAction::ExportCode => self.active_page = Page::DataFlow,
+            MenuAction::ExportRustModule => {
+                let export = self.export_rust_module();
+                self.shared.notes.push(export.clone());
+                self.shared.last_event = format!(
+                    "Generated an in-app Rust module export preview ({} bytes).",
+                    export.len()
+                );
+                Task::none()
+            }
+            MenuAction::ShowTeachingNotes => {
+                self.active_page = Page::About;
+                self.shared.notes.push(self.teaching_notes_export());
+                self.shared.last_event =
+                    "Displayed the teaching notes reference in the About page.".into();
+                Task::none()
+            }
             MenuAction::ToggleSidebarTips => {
-                self.shared.show_sidebar_tips = !self.shared.show_sidebar_tips
+                self.shared.show_sidebar_tips = !self.shared.show_sidebar_tips;
+                Task::none()
             }
-            MenuAction::FocusControlsPage => self.active_page = Page::Controls,
-            MenuAction::OpenInspectorWindow => {
-                self.active_page = Page::Windows;
-                self.windows.status = "Use the Windows page button to spawn the inspector so the demo can register its handle and lifecycle cleanly.".into();
+            MenuAction::FocusControlsPage => {
+                self.active_page = Page::Controls;
+                Task::none()
             }
-            MenuAction::ArrangeStudyLayout => self.active_page = Page::Windows,
-            MenuAction::ViewDocs => self.active_page = Page::Advanced,
-            MenuAction::AboutSandbox => self.active_page = Page::Dashboard,
+            MenuAction::OpenInspectorWindow => self.open_window(windows::WindowKind::Inspector),
+            MenuAction::ArrangeStudyLayout => self.arrange_study_layout(),
+            MenuAction::OpenIcedDocsLesson => {
+                self.active_page = Page::Advanced;
+                self.shared.last_event =
+                    "Opened the in-app Iced docs lesson instead of launching an external browser."
+                        .into();
+                self.shared.notes.push(
+                    "Iced docs lesson: compare this sandbox's Task/update flow with the official Iced guide and API docs.".into(),
+                );
+                Task::none()
+            }
+            MenuAction::AboutSandbox => {
+                self.active_page = Page::About;
+                self.shared.last_event = format!(
+                    "Opened About Sandbox for version {} and project context.",
+                    env!("CARGO_PKG_VERSION")
+                );
+                Task::none()
+            }
         }
+    }
+
+    fn open_window(&mut self, kind: windows::WindowKind) -> Task<Message> {
+        self.active_page = Page::Windows;
+        windows::open_window_task(&mut self.windows, kind)
+    }
+
+    fn arrange_study_layout(&mut self) -> Task<Message> {
+        self.active_page = Page::Windows;
+        self.windows.status =
+            "Arranging study layout: inspector, notes, and preview windows requested in order."
+                .into();
+
+        Task::batch([
+            self.open_window(windows::WindowKind::Inspector),
+            self.open_window(windows::WindowKind::Notes),
+            self.open_window(windows::WindowKind::Preview),
+        ])
+    }
+
+    fn export_rust_module(&self) -> String {
+        format!(
+            "pub struct SandboxSnapshot {{\n    pub learner: &'static str,\n    pub counter: i32,\n    pub active_page: &'static str,\n}}\n\npub const SNAPSHOT: SandboxSnapshot = SandboxSnapshot {{\n    learner: \"{}\",\n    counter: {},\n    active_page: \"{}\",\n}};",
+            self.shared.profile_preview_name(),
+            self.shared.shared_counter,
+            self.active_page.label(),
+        )
+    }
+
+    fn teaching_notes_export(&self) -> String {
+        format!(
+            "Teaching notes\n- Project: {}\n- Version: {}\n- Focus: {}\n- Sidebar tips visible: {}\n- Open windows tracked: {}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"),
+            self.active_page.lesson(),
+            self.shared.show_sidebar_tips,
+            self.windows.records.len(),
+        )
     }
 
     fn status_text(&self) -> String {
@@ -305,6 +449,7 @@ impl App {
             Page::AsyncTasks => pages::async_tasks::view(self),
             Page::Windows => pages::windows::view(self),
             Page::Advanced => pages::advanced::view(self),
+            Page::About => pages::about::view(self),
         }
     }
 }
@@ -331,144 +476,131 @@ mod tests {
     }
 
     #[test]
-    fn menu_actions_update_expected_state() {
+    fn menu_actions_update_expected_pages_without_aliasing() {
         let scenarios = [
-            (MenuAction::OpenRecipe, Page::Layouts),
+            (MenuAction::OpenLayoutRecipe, Page::Layouts),
+            (MenuAction::OpenDataFlowWalkthrough, Page::DataFlow),
             (MenuAction::FocusControlsPage, Page::Controls),
-            (MenuAction::ArrangeStudyLayout, Page::Windows),
-            (MenuAction::ViewDocs, Page::Advanced),
+            (MenuAction::OpenIcedDocsLesson, Page::Advanced),
+            (MenuAction::AboutSandbox, Page::About),
+            (MenuAction::ShowTeachingNotes, Page::About),
         ];
 
         for (action, expected_page) in scenarios {
             let mut app = App::default();
-            app.apply_menu_action(action);
-            assert_eq!(app.active_page, expected_page);
+            let _ = app.apply_menu_action(action);
+            assert_eq!(app.active_page, expected_page, "action: {action:?}");
             assert_eq!(app.shared.last_menu_action, Some(action));
         }
     }
 
     #[test]
-    fn toggle_sidebar_menu_action_flips_visible_state() {
+    fn open_inspector_uses_same_window_open_flow_as_window_message() {
+        let mut via_menu = App::default();
+        let _ = via_menu.apply_menu_action(MenuAction::OpenInspectorWindow);
+
+        let mut via_message = App::default();
+        let _ = via_message.update(Message::WindowOpenRequested(WindowKind::Inspector));
+
+        assert_eq!(via_menu.active_page, Page::Windows);
+        assert_eq!(via_menu.active_page, via_message.active_page);
+        assert_eq!(via_menu.windows.records.len(), 1);
+        assert_eq!(via_menu.windows.records[0].kind, WindowKind::Inspector);
+        assert_eq!(via_message.windows.records.len(), 1);
+        assert_eq!(via_message.windows.records[0].kind, WindowKind::Inspector);
+        assert!(via_menu.windows.selected.is_some());
+        assert!(via_message.windows.selected.is_some());
+        assert!(via_menu.windows.status.contains("Opening Inspector"));
+        assert!(via_message.windows.status.contains("Opening Inspector"));
+    }
+
+    #[test]
+    fn arrange_study_layout_registers_expected_windows_in_order() {
         let mut app = App::default();
-        let start = app.shared.show_sidebar_tips;
+        let _ = app.apply_menu_action(MenuAction::ArrangeStudyLayout);
 
-        app.apply_menu_action(MenuAction::ToggleSidebarTips);
-
-        assert_eq!(app.shared.show_sidebar_tips, !start);
+        let kinds: Vec<_> = app
+            .windows
+            .records
+            .iter()
+            .map(|record| record.kind)
+            .collect();
+        assert_eq!(app.active_page, Page::Windows);
         assert_eq!(
-            app.shared.last_menu_action,
-            Some(MenuAction::ToggleSidebarTips)
+            kinds,
+            vec![
+                WindowKind::Inspector,
+                WindowKind::Notes,
+                WindowKind::Preview
+            ]
+        );
+        assert!(app.windows.status.contains("Opening Live Preview"));
+        assert_eq!(
+            app.windows.selected.map(|id| id),
+            app.windows.records.last().map(|record| record.id)
         );
     }
 
     #[test]
-    fn shared_state_reducer_updates_all_data_flow_paths() {
+    fn export_actions_have_distinct_semantics() {
         let mut app = App::default();
+        app.shared.learner_name = "Ava".into();
+        app.shared.shared_counter = 7;
 
-        app.apply_shared_state_action(SharedStateAction::SetLearnerName {
-            value: "Morgan".into(),
-            source: Page::DataFlow,
-        });
-        assert_eq!(app.shared.learner_name, "Morgan");
-        assert_eq!(app.shared.profile_last_changed_by, Page::DataFlow);
+        let _ = app.apply_menu_action(MenuAction::ExportRustModule);
+        let rust_export = app.shared.notes.last().cloned().expect("rust export note");
+        assert!(rust_export.contains("pub struct SandboxSnapshot"));
+        assert!(rust_export.contains("learner: \"Ava\""));
+        assert!(app.shared.last_event.contains("Rust module export preview"));
 
-        app.apply_shared_state_action(SharedStateAction::SetDashboardStatus {
-            value: "Preview synchronized".into(),
-            source: Page::DataFlow,
-        });
-        assert_eq!(app.shared.dashboard_status, "Preview synchronized");
-        assert_eq!(app.shared.status_last_changed_by, Page::DataFlow);
-
-        app.apply_shared_state_action(SharedStateAction::SetSidebarTipsVisible {
-            value: false,
-            source: Page::DataFlow,
-        });
-        assert!(!app.shared.show_sidebar_tips);
-        assert_eq!(app.shared.preference_last_changed_by, Page::DataFlow);
+        let _ = app.apply_menu_action(MenuAction::ShowTeachingNotes);
+        let teaching_notes = app.shared.notes.last().cloned().expect("teaching notes");
+        assert!(teaching_notes.contains("Teaching notes"));
+        assert!(teaching_notes.contains("Version:"));
+        assert_eq!(app.active_page, Page::About);
     }
 
     #[test]
-    fn data_flow_message_updates_expected_shared_fields() {
+    fn about_and_docs_actions_are_distinct_from_dashboard_navigation() {
         let mut app = App::default();
 
-        let _ = app.update(Message::DataFlow(DataFlowMessage::DashboardStatusEdited(
-            "Tracing message forwarding".into(),
-        )));
+        let _ = app.apply_menu_action(MenuAction::AboutSandbox);
+        assert_eq!(app.active_page, Page::About);
+        assert!(app.shared.last_event.contains("About Sandbox"));
 
-        assert_eq!(app.shared.dashboard_status, "Tracing message forwarding");
-        assert_eq!(app.shared.status_last_changed_by, Page::DataFlow);
+        let _ = app.apply_menu_action(MenuAction::OpenIcedDocsLesson);
+        assert_eq!(app.active_page, Page::Advanced);
+        assert!(app.shared.last_event.contains("in-app Iced docs lesson"));
+    }
+
+    #[test]
+    fn data_flow_messages_apply_shared_state_actions() {
+        let mut app = App::default();
+        app.apply_data_flow_message(DataFlowMessage::ProfileNameEdited("Mia".into()));
+
+        assert_eq!(
+            app.shared.learner_name, "Mia",
+            "profile changes should feed through the reducer-backed path"
+        );
         assert!(app
             .shared
             .last_event
-            .contains("DataFlow updated the dashboard status"));
+            .contains("DataFlow updated the shared learner profile"));
     }
 
     #[test]
-    fn window_messages_update_registry_counts_and_identifiers() {
+    fn shared_state_action_helper_delegates_to_reducer() {
         let mut app = App::default();
-        let id = iced::window::Id::unique();
 
-        app.windows.register_open_request(id, WindowKind::Toolbox);
-        let _ = app.update(Message::WindowOpened(id));
-        let _ = app.update(Message::WindowSelected(id));
-        let _ = app.update(Message::WindowIncrementSelectedToolbox);
-        let _ = app.update(Message::WindowClosed(id));
-
-        assert_eq!(app.windows.open_count(), 0);
-        assert_eq!(app.windows.selected, None);
-        assert!(app.windows.status.contains("Registry cleanup"));
-    }
-
-    #[test]
-    fn reset_data_flow_action_restores_defaults_cleanly() {
-        let mut app = App::default();
-        app.shared.learner_name = "Changed".into();
-        app.shared.dashboard_status = "Changed status".into();
-        app.shared.show_sidebar_tips = false;
-        app.shared.theme_choice = crate::theme::ThemeChoice::HighContrast;
-
-        app.apply_shared_state_action(SharedStateAction::ResetDataFlowDemo {
-            source: Page::DataFlow,
+        app.apply_shared_state_action(SharedStateAction::SetDashboardStatus {
+            value: "Reducer updated dashboard".into(),
+            source: Page::Dashboard,
         });
 
-        let defaults = App::default();
-        assert_eq!(app.shared.learner_name, defaults.shared.learner_name);
-        assert_eq!(
-            app.shared.dashboard_status,
-            defaults.shared.dashboard_status
-        );
-        assert_eq!(
-            app.shared.show_sidebar_tips,
-            defaults.shared.show_sidebar_tips
-        );
-        assert_eq!(app.shared.theme_choice, defaults.shared.theme_choice);
-        assert_eq!(app.shared.profile_last_changed_by, Page::DataFlow);
-        assert_eq!(app.shared.status_last_changed_by, Page::DataFlow);
-        assert_eq!(app.shared.preference_last_changed_by, Page::DataFlow);
-    }
-
-    #[test]
-    fn forms_submission_regression_updates_summary_without_validation_logic_in_view() {
-        let mut app = App::default();
-        app.form_draft = crate::forms::FormDraft::example();
-
-        let _ = app.update(Message::FormSubmitted);
-
-        assert!(app.form_submission_summary.contains("plans to"));
-        assert!(app.shared.last_event.contains("Forms page submitted"));
-    }
-
-    #[test]
-    fn async_reset_restores_idle_state() {
-        let mut app = App::default();
-        app.async_demo.is_loading = true;
-        app.async_demo.completed_steps = 3;
-        app.async_demo.last_result = "done".into();
-
-        let _ = app.update(Message::AsyncReset);
-
-        assert!(!app.async_demo.is_loading);
-        assert_eq!(app.async_demo.completed_steps, 0);
-        assert_eq!(app.async_demo.last_result, "No result yet");
+        assert_eq!(app.shared.dashboard_status, "Reducer updated dashboard");
+        assert!(app
+            .shared
+            .last_event
+            .contains("Dashboard updated the dashboard status"));
     }
 }

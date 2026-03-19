@@ -69,7 +69,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         "When a menu item emits a Message::MenuSelected event, App::update mutates state and the dashboard re-renders this text.",
         column![
             text(format!("Last selected action: {last_action}")),
-            button("Open the inspector via a normal button")
+            button("Open the real inspector window")
                 .on_press(Message::MenuSelected(MenuAction::OpenInspectorWindow)),
             text("Interesting item to notice: the pure menu hierarchy lives in src/menu.rs so tests can verify structure without depending on iced_aw widgets."),
         ]
@@ -91,9 +91,6 @@ fn build_menu_bar<'a>() -> Element<'a, Message> {
     let root = |items| Menu::new(items).max_width(220.0).spacing(4.0).offset(12.0);
     let nested = |items| Menu::new(items).max_width(220.0).spacing(4.0).offset(0.0);
 
-    // `iced_aw` adds value here by providing a desktop-like menu bar quickly.
-    // The structure is still mirrored in src/menu.rs because educational demos
-    // benefit from pure metadata you can inspect and test separately.
     #[rustfmt::skip]
     let bar = menu_bar!(
         (
@@ -103,16 +100,16 @@ fn build_menu_bar<'a>() -> Element<'a, Message> {
                 (
                     button("Open"),
                     nested(menu_items!(
-                        (button("Layout Recipe").on_press(Message::MenuSelected(MenuAction::OpenRecipe)))
-                        (button("Data Flow Walkthrough").on_press(Message::MenuSelected(MenuAction::ExportCode)))
+                        (button("Layout Recipe").on_press(Message::MenuSelected(MenuAction::OpenLayoutRecipe)))
+                        (button("Data Flow Walkthrough").on_press(Message::MenuSelected(MenuAction::OpenDataFlowWalkthrough)))
                     ))
                 )
                 (button("Save Snapshot").on_press(Message::MenuSelected(MenuAction::SaveSnapshot)))
                 (
                     button("Export"),
                     nested(menu_items!(
-                        (button("Rust Module").on_press(Message::MenuSelected(MenuAction::ExportCode)))
-                        (button("Teaching Notes").on_press(Message::MenuSelected(MenuAction::SaveSnapshot)))
+                        (button("Rust Module").on_press(Message::MenuSelected(MenuAction::ExportRustModule)))
+                        (button("Show Teaching Notes").on_press(Message::MenuSelected(MenuAction::ShowTeachingNotes)))
                     ))
                 )
             ))
@@ -134,7 +131,7 @@ fn build_menu_bar<'a>() -> Element<'a, Message> {
         (
             button("Help"),
             root(menu_items!(
-                (button("View Iced Docs").on_press(Message::MenuSelected(MenuAction::ViewDocs)))
+                (button("Open Iced docs lesson").on_press(Message::MenuSelected(MenuAction::OpenIcedDocsLesson)))
                 (button("About Sandbox").on_press(Message::MenuSelected(MenuAction::AboutSandbox)))
             ))
         )

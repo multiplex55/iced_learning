@@ -24,22 +24,22 @@ pub enum MenuNode {
 const FILE_OPEN_CHILDREN: &[MenuNode] = &[
     MenuNode::Action(MenuLeaf {
         label: "Layout Recipe",
-        action: MenuAction::OpenRecipe,
+        action: MenuAction::OpenLayoutRecipe,
     }),
     MenuNode::Action(MenuLeaf {
         label: "Data Flow Walkthrough",
-        action: MenuAction::ExportCode,
+        action: MenuAction::OpenDataFlowWalkthrough,
     }),
 ];
 
 const FILE_EXPORT_CHILDREN: &[MenuNode] = &[
     MenuNode::Action(MenuLeaf {
         label: "Rust Module",
-        action: MenuAction::ExportCode,
+        action: MenuAction::ExportRustModule,
     }),
     MenuNode::Action(MenuLeaf {
-        label: "Teaching Notes",
-        action: MenuAction::SaveSnapshot,
+        label: "Show Teaching Notes",
+        action: MenuAction::ShowTeachingNotes,
     }),
 ];
 
@@ -86,8 +86,8 @@ const WINDOW_CHILDREN: &[MenuNode] = &[
 
 const HELP_CHILDREN: &[MenuNode] = &[
     MenuNode::Action(MenuLeaf {
-        label: "View Iced Docs",
-        action: MenuAction::ViewDocs,
+        label: "Open Iced docs lesson",
+        action: MenuAction::OpenIcedDocsLesson,
     }),
     MenuNode::Action(MenuLeaf {
         label: "About Sandbox",
@@ -130,6 +130,12 @@ pub fn collect_action_labels(nodes: &'static [MenuNode]) -> Vec<&'static str> {
     labels
 }
 
+pub fn collect_menu_leaves(nodes: &'static [MenuNode]) -> Vec<MenuLeaf> {
+    let mut leaves = Vec::new();
+    collect_menu_leaves_into(nodes, &mut leaves);
+    leaves
+}
+
 fn collect_action_labels_into(nodes: &'static [MenuNode], labels: &mut Vec<&'static str>) {
     for node in nodes {
         match node {
@@ -139,9 +145,19 @@ fn collect_action_labels_into(nodes: &'static [MenuNode], labels: &mut Vec<&'sta
     }
 }
 
+fn collect_menu_leaves_into(nodes: &'static [MenuNode], leaves: &mut Vec<MenuLeaf>) {
+    for node in nodes {
+        match node {
+            MenuNode::Action(leaf) => leaves.push(*leaf),
+            MenuNode::Group { children, .. } => collect_menu_leaves_into(children, leaves),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{collect_action_labels, top_level_menu_summaries, ROOT_MENUS};
+    use super::{collect_action_labels, collect_menu_leaves, top_level_menu_summaries, ROOT_MENUS};
+    use crate::message::MenuAction;
     use std::collections::HashSet;
 
     #[test]
@@ -159,5 +175,78 @@ mod tests {
 
         let unique = labels.iter().copied().collect::<HashSet<_>>();
         assert_eq!(labels.len(), unique.len());
+    }
+
+    #[test]
+    fn each_menu_label_maps_to_dedicated_action() {
+        let leaves = collect_menu_leaves(ROOT_MENUS);
+
+        assert_eq!(
+            leaves,
+            vec![
+                super::MenuLeaf {
+                    label: "New Sandbox",
+                    action: MenuAction::NewSandbox
+                },
+                super::MenuLeaf {
+                    label: "Layout Recipe",
+                    action: MenuAction::OpenLayoutRecipe
+                },
+                super::MenuLeaf {
+                    label: "Data Flow Walkthrough",
+                    action: MenuAction::OpenDataFlowWalkthrough
+                },
+                super::MenuLeaf {
+                    label: "Save Snapshot",
+                    action: MenuAction::SaveSnapshot
+                },
+                super::MenuLeaf {
+                    label: "Rust Module",
+                    action: MenuAction::ExportRustModule
+                },
+                super::MenuLeaf {
+                    label: "Show Teaching Notes",
+                    action: MenuAction::ShowTeachingNotes
+                },
+                super::MenuLeaf {
+                    label: "Toggle Sidebar Tips",
+                    action: MenuAction::ToggleSidebarTips
+                },
+                super::MenuLeaf {
+                    label: "Jump to Controls",
+                    action: MenuAction::FocusControlsPage
+                },
+                super::MenuLeaf {
+                    label: "Open Inspector",
+                    action: MenuAction::OpenInspectorWindow
+                },
+                super::MenuLeaf {
+                    label: "Arrange Study Layout",
+                    action: MenuAction::ArrangeStudyLayout
+                },
+                super::MenuLeaf {
+                    label: "Open Iced docs lesson",
+                    action: MenuAction::OpenIcedDocsLesson
+                },
+                super::MenuLeaf {
+                    label: "About Sandbox",
+                    action: MenuAction::AboutSandbox
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn formerly_overloaded_actions_are_now_distinct_variants() {
+        assert_ne!(
+            MenuAction::OpenDataFlowWalkthrough,
+            MenuAction::ExportRustModule
+        );
+        assert_ne!(MenuAction::ShowTeachingNotes, MenuAction::SaveSnapshot);
+        assert_ne!(MenuAction::OpenIcedDocsLesson, MenuAction::AboutSandbox);
+        assert_ne!(
+            MenuAction::OpenInspectorWindow,
+            MenuAction::ArrangeStudyLayout
+        );
     }
 }
