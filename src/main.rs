@@ -4,6 +4,8 @@
 //! `main` into the `App` state, the `Message` enum, and the page modules.
 
 mod app;
+mod forms;
+mod menu;
 mod message;
 mod pages;
 mod state;

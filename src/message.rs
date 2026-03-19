@@ -5,6 +5,7 @@
 //! handles them.
 
 use crate::pages::{data_flow::DataFlowMessage, windows::WindowKind, Page};
+use crate::theme::ThemeChoice;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
@@ -49,9 +50,17 @@ pub enum Message {
     ControlsSliderChanged(u8),
     ControlsChoiceSelected(ControlChoice),
     ProgressStepped,
-    AdvancedThemeToggled(bool),
+    ThemeSelected(ThemeChoice),
     DataFlow(DataFlowMessage),
     Tick,
+    FormNameChanged(String),
+    FormEmailChanged(String),
+    FormGoalChanged(String),
+    FormLoadExample,
+    FormSubmitted,
+    AsyncStarted,
+    AsyncFinished(String),
+    AsyncReset,
     WindowOpenRequested(WindowKind),
     WindowOpened(iced::window::Id),
     WindowSelected(iced::window::Id),

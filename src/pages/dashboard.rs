@@ -9,13 +9,14 @@ use iced_aw::menu::{Item, Menu};
 use iced_aw::{menu_bar, menu_items};
 
 use crate::app::App;
+use crate::menu;
 use crate::message::{MenuAction, Message};
 use crate::theme;
 use crate::widgets;
 
 #[cfg(test)]
-pub fn menu_groups() -> [(&'static str, usize); 4] {
-    [("File", 4), ("View", 2), ("Window", 2), ("Help", 2)]
+pub fn menu_groups() -> Vec<(&'static str, usize)> {
+    menu::top_level_menu_summaries()
 }
 
 pub fn view(app: &App) -> Element<'_, Message> {
@@ -42,6 +43,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 "Shared dashboard status: {}",
                 app.shared.dashboard_status
             )),
+            text(format!(
+                "Theme choice metadata: {}",
+                app.shared.theme_choice.label()
+            )),
             text(format!("Shared counter: {}", app.shared.shared_counter)),
             text(format!(
                 "Derived dashboard summary: {}",
@@ -66,14 +71,11 @@ pub fn view(app: &App) -> Element<'_, Message> {
             text(format!("Last selected action: {last_action}")),
             button("Open the inspector via a normal button")
                 .on_press(Message::MenuSelected(MenuAction::OpenInspectorWindow)),
+            text("Interesting item to notice: the pure menu hierarchy lives in src/menu.rs so tests can verify structure without depending on iced_aw widgets."),
         ]
-        .spacing(10)
-
+        .spacing(10),
     );
 
-    // Code-reading hint: the menu widget tree below is paired with
-    // App::apply_menu_action so learners can see how view emits events and
-    // update changes visible state.
     let content = column![
         widgets::section_title("Dashboard"),
         widgets::note("The dashboard places an iced_aw menu bar above explanatory cards so event flow stays visible."),
@@ -89,6 +91,9 @@ fn build_menu_bar<'a>() -> Element<'a, Message> {
     let root = |items| Menu::new(items).max_width(220.0).spacing(4.0).offset(12.0);
     let nested = |items| Menu::new(items).max_width(220.0).spacing(4.0).offset(0.0);
 
+    // `iced_aw` adds value here by providing a desktop-like menu bar quickly.
+    // The structure is still mirrored in src/menu.rs because educational demos
+    // benefit from pure metadata you can inspect and test separately.
     #[rustfmt::skip]
     let bar = menu_bar!(
         (
@@ -146,7 +151,7 @@ mod tests {
     fn dashboard_menu_groups_match_expected_labels_and_sizes() {
         assert_eq!(
             menu_groups(),
-            [("File", 4), ("View", 2), ("Window", 2), ("Help", 2)]
+            vec![("File", 4), ("View", 2), ("Window", 2), ("Help", 2)]
         );
     }
 }
